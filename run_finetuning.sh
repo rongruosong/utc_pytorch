@@ -23,10 +23,10 @@ learning_rate=1e-5
 max_epochs=20
 
 max_grad_norm=1
-grad_accum_steps=1
+grad_accum_steps=2
 eval_steps=100
 logging_steps=100
-save_checkpoint_steps=100
+save_checkpoint_steps=500
 
 seed=42
 
