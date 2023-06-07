@@ -5,8 +5,8 @@ CURRENT_DIR=`pwd`
 # strategy="ddp"
 # devices=1
 
-train_data_path=$CURRENT_DIR/data/train.txt
-test_data_path=$CURRENT_DIR/data/dev.txt
+train_data_path=/gemini/data-1/train.txt
+test_data_path=/gemini/data-1/dev.txt
 
 config_path=/gemini/pretrain/config.json
 vocab_path=/gemini/pretrain/
@@ -15,8 +15,8 @@ pretrained_model_path=/gemini/pretrain/pytorch_model.bin
 checkpoint_dir=/gemini/checkpoint_dir
 log_dir=/gemini/output
 
-train_batch_size=2
-test_batch_size=2
+train_batch_size=16
+test_batch_size=16
 seq_length=512
 learning_rate=1e-5
 
@@ -24,8 +24,8 @@ max_epochs=20
 
 max_grad_norm=1
 grad_accum_steps=1
-eval_steps=10
-logging_steps=10
+eval_steps=100
+logging_steps=100
 save_checkpoint_steps=100
 
 seed=42

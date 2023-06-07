@@ -14,6 +14,7 @@ from lightning_utilities import apply_to_collection
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from torchmetrics import MeanMetric, Metric, MetricCollection, F1Score
+from torchmetrics.utilities.data import to_categorical
 
 class Trainer:
     def __init__(
@@ -21,6 +22,8 @@ class Trainer:
         args: argparse.Namespace,
         fabric: Fabric,
         optimizer: Optimizer,
+        train_metrics: Metric,
+        test_metrics: Metric,
         scheduler: Optional[Callable] = None
     ) -> None:
         self.fabric = fabric
@@ -39,6 +42,7 @@ class Trainer:
         self.save_checkpoint_steps = args.save_checkpoint_steps
         self.checkpoint_dir = args.checkpoint_dir
 
+        self.task_type = args.task_type
         self.num_classes = args.num_classes
         self.ignore_index = args.ignore_index
 
@@ -47,14 +51,8 @@ class Trainer:
         self.current_epoch = 0
 
         self.train_loss = self.fabric.to_device(MeanMetric())
-        self.train_metrics = self.fabric.to_device(
-            MetricCollection(
-                { 
-                    'micro_f1': F1Score(task='multilabel', num_labels=self.num_classes, average='micro', ignore_index=self.ignore_index),
-                    'macro_f1': F1Score(task='multilabel', num_labels=self.num_classes, average='macro', ignore_index=self.ignore_index)
-                }
-            )
-        )
+        self.train_metrics = self.fabric.to_device(train_metrics)
+        self.test_metrics = self.fabric.to_device(test_metrics)
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         # input_ids, token_type_ids, position_ids, attention_mask, omask_positions, cls_positions, labels = batch
@@ -69,7 +67,13 @@ class Trainer:
        
         metric_output = apply_to_collection(output, torch.Tensor, lambda x: x.detach())
         self.train_loss.update(metric_output['loss'])
-        self.train_metrics(metric_output['option_logits'], batch['labels'])
+        if self.task_type == 'multiclass':
+            metric_output['option_logits'] = to_categorical(metric_output['option_logits'])
+            metric_output['labels'] = to_categorical(batch['labels'])
+        else:
+            metric_output['labels'] = batch['labels']
+            
+        self.train_metrics(metric_output['option_logits'], metric_output['labels'])
         return output['loss']
 
     def train_epoch(self, train_loader: DataLoader, val_loader: DataLoader):
@@ -117,20 +121,18 @@ class Trainer:
     def eval(self, val_loader: DataLoader):
         torch.set_grad_enabled(False)
         test_loss = self.fabric.to_device(MeanMetric())
-        test_metrics = self.fabric.to_device(
-            MetricCollection(
-                { 
-                    'micro_f1': F1Score(task='multilabel', num_labels=self.num_classes, average='micro', ignore_index=self.ignore_index),
-                    'macro_f1': F1Score(task='multilabel', num_labels=self.num_classes, average='macro', ignore_index=self.ignore_index)
-                }
-            )
-        )
         for i, batch in enumerate(val_loader):
             output = self.forward(batch)
             output = apply_to_collection(output, torch.Tensor, lambda x: x.detach())
             test_loss.update(output['loss'])
-            test_metrics.update(output['option_logits'], batch['labels'])
-        self.log_info(test_loss, test_metrics, 'eval')
+            if self.task_type == 'multiclass':
+                output['option_logits'] = to_categorical(output['option_logits'])
+                output['labels'] = to_categorical(batch['labels'])
+            else:
+                output['labels'] = batch['labels']
+
+            self.test_metrics.update(output['option_logits'], output['labels'])
+        self.log_info(test_loss, self.test_metrics, 'eval')
         torch.set_grad_enabled(True)
     
     def fit(

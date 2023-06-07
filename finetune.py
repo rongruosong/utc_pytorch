@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from lightning.fabric import Fabric
 from lightning.fabric.loggers import TensorBoardLogger
 from lightning.fabric.strategies import DDPStrategy
+from torchmetrics import MetricCollection, F1Score
 from train_argparse import parse_args
 from template import UTCTemplate
 from transformers import BertTokenizer, ErnieConfig, PreTrainedTokenizer, get_linear_schedule_with_warmup
@@ -108,9 +109,43 @@ def main():
     )
     
     fabric.print('total steps: {}'.format(estimated_stepping_batches))
+    # create metircs
+    micro_conf = {
+        'task': args.task_type, 
+        'num_labels': args.num_classes, 
+        'num_classes': args.num_classes, 
+        'average': 'micro', 
+        'ignore_index': args.ignore_index
+    }
+    macro_conf = {
+        'task': args.task_type, 
+        'num_labels': args.num_classes, 
+        'num_classes': args.num_classes, 
+        'average': 'macro', 
+        'ignore_index': args.ignore_index
+    }
+    train_metrics = MetricCollection(
+        { 
+            'micro_f1': F1Score(**micro_conf),
+            'macro_f1': F1Score(**macro_conf)
+        }
+    )
+    test_metrics = MetricCollection(
+        { 
+            'micro_f1': F1Score(**micro_conf),
+            'macro_f1': F1Score(**macro_conf)
+        }
+    )
     # train
     fabric.print('begin to fit model')
-    trainer = Trainer(args, fabric, optimizer=optimizer, scheduler=scheduler)
+    trainer = Trainer(
+        args, 
+        fabric, 
+        optimizer=optimizer, 
+        train_metrics=train_metrics, 
+        test_metrics=test_metrics,
+        scheduler=scheduler
+    )
     trainer.fit(model, train_loader, val_loader)
 
 

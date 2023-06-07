@@ -304,5 +304,3 @@ class DataCollatorWithPadding:
                 batch[key] = self._convert_to_tensors(values)
         
         return batch
-
-                

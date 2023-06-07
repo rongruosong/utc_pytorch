@@ -5,6 +5,10 @@ import argparse
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='information extraction')
 
+    # task type
+    parser.add_argument("--task_type",choices=["multiclass", "multilabel"],
+                        default="multiclass",
+                        help="task type.")
     # env options
     parser.add_argument("--devices", type=int, default=1,
                         help='the number of GPU')
